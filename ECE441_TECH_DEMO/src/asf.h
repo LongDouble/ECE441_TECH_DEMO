@@ -65,7 +65,14 @@
 // From module: Interrupt management - SAM implementation
 #include <interrupt.h>
 
+// From module: PMC - Power Management Controller
+#include <pmc.h>
+#include <sleep.h>
+
 // From module: Part identification macros
 #include <parts.h>
+
+// From module: System Clock Control - SAM4S implementation
+#include <sysclk.h>
 
 #endif // ASF_H
