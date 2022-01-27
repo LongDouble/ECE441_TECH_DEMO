@@ -65,11 +65,11 @@
 // From module: Generic board support
 #include <board.h>
 
+// From module: IOPORT - General purpose I/O service
+#include <ioport.h>
+
 // From module: Interrupt management - SAM implementation
 #include <interrupt.h>
-
-// From module: PIO - Parallel Input/Output Controller
-#include <pio.h>
 
 // From module: PMC - Power Management Controller
 #include <pmc.h>
@@ -80,8 +80,5 @@
 
 // From module: System Clock Control - SAM4S implementation
 #include <sysclk.h>
-
-// From module: pio_handler support enabled
-#include <pio_handler.h>
 
 #endif // ASF_H

@@ -29,6 +29,7 @@
  * Support and FAQ: visit <a href="https://www.microchip.com/support/">Microchip Support</a>
  */
 #include <asf.h>
+#define TEST_LED PIO_PA3_IDX
 
 int main (void)
 {
@@ -36,27 +37,19 @@ int main (void)
 
 	board_init();
 	sysclk_init();
+	ioport_init();
 	
 	// Disable watchdog timer to stop the MCU from resetting
 	WDT->WDT_MR |= WDT_MR_WDDIS;
 	
-	pmc_enable_periph_clk(ID_PIOA);
-	pio_set_output(PIOA, PIO_PA3, HIGH, DISABLE, ENABLE);
-	pio_set(PIOA, PIO_PA3);
-	
+	ioport_set_pin_dir(TEST_LED, IOPORT_DIR_OUTPUT);
+	ioport_set_pin_level(TEST_LED, 1);
 
 	/* Insert application code here, after the board has been initialized. */
-	bool is_on = 1;
 	for(;;)
 	{
-		if(is_on)
-			pio_clear(PIOA, PIO_PA3);
-		else
-			pio_set(PIOA, PIO_PA3);
-		
-		is_on = !is_on;
-		
 		delay_ms(1000);
+		ioport_toggle_pin_level(TEST_LED);
 	}
 	
 }

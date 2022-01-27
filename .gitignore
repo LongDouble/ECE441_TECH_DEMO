@@ -58,3 +58,4 @@ dkms.conf
 
 # Debug files
 ECE441_TECH_DEMO/Debug
+jlink.*log
