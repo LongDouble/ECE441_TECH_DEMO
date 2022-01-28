@@ -47,13 +47,28 @@
 #define PINS_UART0_TYPE     PIO_PERIPH_A
 #define PINS_UART0_ATTR     PIO_DEFAULT
 
+// ADC defines
+#define ADC_CLOCK 1000000
+
+// Globals
+uint32_t adc_result;
+
+void ADC_Handler(void)
+{
+	// Check the ADC conversion status
+	if ((adc_get_status(ADC) & ADC_ISR_DRDY) == ADC_ISR_DRDY)
+	{
+		// Get latest digital data value from ADC and can be used by application
+		adc_result = adc_get_latest_value(ADC);
+	}
+}
+
 void uart_print(Uart *p_uart, char* message);
-//uint32_t uart_write(Uart *p_uart, const uint8_t uc_data)
+void adc_setup(void);
 
 int main (void)
 {
 	char buffer[BUFFER_SIZE];
-	int counter;
 	/* Insert system clock initialization code here (sysclk_init()). */
 	
 	// Initialize board stuff
@@ -74,6 +89,7 @@ int main (void)
 	
 	// Enable UART0 clock
 	pmc_enable_periph_clk(ID_UART0);
+	pmc_enable_periph_clk(ID_ADC);
 	
 	// Defines master clock rate, baud rate, and mode (parity or no)
 	const sam_uart_opt_t uart0_settings = {sysclk_get_cpu_hz(), UART_SERIAL_BAUDRATE, UART_SERIAL_MODE};
@@ -81,20 +97,32 @@ int main (void)
 	uart_init(UART0, &uart0_settings);      // Init UART0
 	uart_enable_tx(UART0);
 	
+	// Setup and start ADC
+	adc_setup();
 
 	/* Insert application code here, after the board has been initialized. */
-	counter = 0;
 	for(;;)
 	{
-		delay_ms(1000);
+		adc_start(ADC);
+		delay_ms(100);
 
-		snprintf(buffer, BUFFER_SIZE, "Hello world! (%d)\r\n", counter);
+		snprintf(buffer, BUFFER_SIZE, "Hello world! (%lu)\r\n", adc_result);
 		uart_print(UART0, buffer);
-		counter++;
 
 		ioport_toggle_pin_level(TEST_LED);
 	}
 	
+}
+
+void adc_setup(void)
+{
+	adc_init(ADC, sysclk_get_main_hz(), ADC_CLOCK, 8);
+	adc_configure_timing(ADC, 0, ADC_SETTLING_TIME_3, 1);
+	adc_set_resolution(ADC, ADC_MR_LOWRES_BITS_12);
+	adc_enable_channel(ADC, ADC_CHANNEL_1);
+	adc_enable_interrupt(ADC, ADC_IER_DRDY);
+	adc_configure_trigger(ADC, ADC_TRIG_SW, 0);
+	NVIC_EnableIRQ(ADC_IRQn);
 }
 
 void uart_print(Uart *p_uart, char* message){
@@ -108,3 +136,5 @@ void uart_print(Uart *p_uart, char* message){
 		uart_write(p_uart, (uint8_t)(message[i]));
 	}
 }
+
+
