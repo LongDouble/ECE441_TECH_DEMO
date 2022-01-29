@@ -32,99 +32,142 @@
 #include <stdio.h>
 #include <string.h>
 
-#define TEST_LED PIO_PA3_IDX
-#define BUFFER_SIZE 256
+// LED defines
+#define TEST_LED				PIO_PA3_IDX
 
 // UART defines
-#define UART_SERIAL_BAUDRATE			115200
-#define UART_SERIAL_CHANNEL_MODE		UART_MR_CHMODE_NORMAL	// Normal channel mode
-#define UART_SERIAL_MODE				UART_MR_PAR_NO			// No parity bit
-#define PINS_UART0          (PIO_PA9A_URXD0 | PIO_PA10A_UTXD0)	// Easier name for UART pins
-#define PINS_UART0_FLAGS    (PIO_PERIPH_A | PIO_DEFAULT)		// Use periph A with no PU, filtering, or open drain
-#define PINS_UART0_MASK     (PIO_PA9A_URXD0 | PIO_PA10A_UTXD0)
-#define PINS_UART0_PIO      PIOA
-#define PINS_UART0_ID       ID_PIOA
-#define PINS_UART0_TYPE     PIO_PERIPH_A
-#define PINS_UART0_ATTR     PIO_DEFAULT
+#define UART_SERIAL_BAUDRATE	115200
+#define UART_SERIAL_MODE		UART_MR_PAR_NO
+#define BUFFER_SIZE				256
 
 // ADC defines
-#define ADC_CLOCK 1000000
+#define ADC_CLOCK				1000000
 
 // Globals
 uint32_t adc_result;
 
-void ADC_Handler(void)
-{
-	// Check the ADC conversion status
-	if ((adc_get_status(ADC) & ADC_ISR_DRDY) == ADC_ISR_DRDY)
-	{
-		// Get latest digital data value from ADC and can be used by application
-		adc_result = adc_get_latest_value(ADC);
-	}
-}
-
+// User-defined functions
 void uart_print(Uart *p_uart, char* message);
+void led_setup(void);
+void uart_setup(void);
 void adc_setup(void);
 
 int main (void)
 {
-	char buffer[BUFFER_SIZE];
-	/* Insert system clock initialization code here (sysclk_init()). */
+	char buffer[BUFFER_SIZE];	// UART message to transmit
+	float voltage;				// Voltage measured by ADC
+	uint32_t binary[2];			// Binary representation of ADC count
 	
-	// Initialize board stuff
+	/* Insert system clock initialization code here (sysclk_init()). */
 	board_init();
 	sysclk_init();
 	
 	// Disable watchdog timer to stop the MCU from resetting
 	WDT->WDT_MR |= WDT_MR_WDDIS;
 	
-	// Configure TEST_LED I/O pin and set high
-	ioport_init();
-	ioport_set_pin_dir(TEST_LED, IOPORT_DIR_OUTPUT);
-	ioport_set_pin_level(TEST_LED, 1);
-	
-	/* Configure UART0 (PA9 = RX, PA10 = TX) */
-	// Set the pins to use the UART peripheral
-	pio_configure(PINS_UART0_PIO, PINS_UART0_TYPE, PINS_UART0_MASK, PINS_UART0_ATTR);
-	
-	// Enable UART0 clock
-	pmc_enable_periph_clk(ID_UART0);
-	pmc_enable_periph_clk(ID_ADC);
-	
-	// Defines master clock rate, baud rate, and mode (parity or no)
-	const sam_uart_opt_t uart0_settings = {sysclk_get_cpu_hz(), UART_SERIAL_BAUDRATE, UART_SERIAL_MODE};
-		
-	uart_init(UART0, &uart0_settings);      // Init UART0
-	uart_enable_tx(UART0);
-	
-	// Setup and start ADC
-	adc_setup();
-
 	/* Insert application code here, after the board has been initialized. */
+	ioport_init();
+	
+	// Call setup routines
+	led_setup();
+	uart_setup();
+	adc_setup();
+	
 	for(;;)
 	{
+		// Start a single ADC conversion
 		adc_start(ADC);
+		
+		// Wait 100 ms
 		delay_ms(100);
-
-		snprintf(buffer, BUFFER_SIZE, "Hello world! (%lu)\r\n", adc_result);
+		
+		// Convert ADC result into a voltage
+		voltage = ((float)(adc_result))/(4095.0) * 3.3;
+		
+		// Get upper 6 bits of ADC result
+		binary[1] = ((adc_result >> 10) & 1)*100000;
+		binary[1] += ((adc_result >> 9) & 1)*10000;
+		binary[1] += ((adc_result >> 8) & 1)*1000;
+		binary[1] += ((adc_result >> 7) & 1)*100;
+		binary[1] += ((adc_result >> 6) & 1)*10;
+		binary[1] += ((adc_result >> 5) & 1)*1;
+		
+		// Get lower 5 bits of ADC result
+		binary[0] = ((adc_result >> 4) & 1)*10000;
+		binary[0] += ((adc_result >> 3) & 1)*1000;
+		binary[0] += ((adc_result >> 2) & 1)*100;
+		binary[0] += ((adc_result >> 1) & 1)*10;
+		binary[0] += ((adc_result) & 1)*1;
+		
+		// Format a message to send over UART0
+		snprintf(buffer, BUFFER_SIZE, "ADC Count[(%lu)], Binary[0b%06lu%05lu], Voltage[%f]\r\n", adc_result, binary[1], binary[0], voltage);
+		
+		// Send the message over UART0
 		uart_print(UART0, buffer);
-
+		
+		// Toggle the LED
 		ioport_toggle_pin_level(TEST_LED);
 	}
 	
 }
 
+/* USER DEFINED FUNCTIONS */
+
+// Sets up the LED
+void led_setup(void)
+{
+	// Configure TEST_LED I/O pin and set high
+	ioport_set_pin_dir(TEST_LED, IOPORT_DIR_OUTPUT);
+	ioport_set_pin_level(TEST_LED, 1);
+}
+
+// Sets up the UART0
+void uart_setup(void)
+{
+	// Defines master clock rate, baud rate, and mode (parity or no)
+	const sam_uart_opt_t uart0_settings = {sysclk_get_cpu_hz(), UART_SERIAL_BAUDRATE, UART_SERIAL_MODE};
+		
+	// Set pins to use the UART peripheral
+	ioport_set_port_mode(IOPORT_PIOA,  PIO_PA9A_URXD0 | PIO_PA10A_UTXD0, IOPORT_MODE_MUX_A);
+	ioport_disable_port(IOPORT_PIOA, PIO_PA9A_URXD0 | PIO_PA10A_UTXD0);
+		
+	// Enable UART0 clock
+	pmc_enable_periph_clk(ID_UART0);
+		
+	// Initialize UART and enable TX
+	uart_init(UART0, &uart0_settings); 
+	uart_enable_tx(UART0);
+}
+
+// Sets up the ADC1
 void adc_setup(void)
 {
+	// Enable ADC clock
+	pmc_enable_periph_clk(ID_ADC);
+	
+	// Initialize ADC with 1 MHz clock
 	adc_init(ADC, sysclk_get_main_hz(), ADC_CLOCK, 8);
+	
+	// Configure ADC timing
 	adc_configure_timing(ADC, 0, ADC_SETTLING_TIME_3, 1);
+	
+	// Configure ADC resolution
 	adc_set_resolution(ADC, ADC_MR_LOWRES_BITS_12);
+	
+	// Enable ADC1
 	adc_enable_channel(ADC, ADC_CHANNEL_1);
+	
+	// Enable Data Ready Interrupt
 	adc_enable_interrupt(ADC, ADC_IER_DRDY);
+	
+	// Set ADC to use software trigger
 	adc_configure_trigger(ADC, ADC_TRIG_SW, 0);
+	
+	// Enable ADC_Handler interrupt
 	NVIC_EnableIRQ(ADC_IRQn);
 }
 
+// Sends every character of message to the UART
 void uart_print(Uart *p_uart, char* message){
 	
 	// For every character in the message...
@@ -134,6 +177,19 @@ void uart_print(Uart *p_uart, char* message){
 		while (!(p_uart->UART_SR & UART_SR_TXRDY));
 		
 		uart_write(p_uart, (uint8_t)(message[i]));
+	}
+}
+
+/* INTERRUPTS */
+
+// Called during any enabled ADC interrupt
+void ADC_Handler(void)
+{
+	// Check the ADC conversion status
+	if ((adc_get_status(ADC) & ADC_ISR_DRDY) == ADC_ISR_DRDY)
+	{
+		// Get latest digital data value from ADC and can be used by application
+		adc_result = adc_get_latest_value(ADC);
 	}
 }
 
