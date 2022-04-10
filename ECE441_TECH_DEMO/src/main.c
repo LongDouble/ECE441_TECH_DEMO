@@ -34,6 +34,7 @@
 
 // LED defines
 #define TEST_LED				PIO_PA3_IDX
+#define SQUARE_PIN				PIO_PA0_IDX
 
 // UART defines
 #define UART_SERIAL_BAUDRATE	115200
@@ -49,6 +50,7 @@ uint32_t adc_result;
 // User-defined functions
 void uart_print(Uart *p_uart, char* message);
 void led_setup(void);
+void square_setup(void);
 void uart_setup(void);
 void adc_setup(void);
 
@@ -70,6 +72,7 @@ int main (void)
 	
 	// Call setup routines
 	led_setup();
+	square_setup();
 	uart_setup();
 	adc_setup();
 	
@@ -85,28 +88,32 @@ int main (void)
 		voltage = ((float)(adc_result))/(4095.0) * 3.3;
 		
 		// Get upper 6 bits of ADC result
-		binary[1] = ((adc_result >> 10) & 1)*100000;
-		binary[1] += ((adc_result >> 9) & 1)*10000;
-		binary[1] += ((adc_result >> 8) & 1)*1000;
-		binary[1] += ((adc_result >> 7) & 1)*100;
-		binary[1] += ((adc_result >> 6) & 1)*10;
-		binary[1] += ((adc_result >> 5) & 1)*1;
+		binary[1] = ((adc_result >> 11) & 1)*100000;
+		binary[1] += ((adc_result >> 10) & 1)*10000;
+		binary[1] += ((adc_result >> 9) & 1)*1000;
+		binary[1] += ((adc_result >> 8) & 1)*100;
+		binary[1] += ((adc_result >> 7) & 1)*10;
+		binary[1] += ((adc_result >> 6) & 1)*1;
 		
-		// Get lower 5 bits of ADC result
-		binary[0] = ((adc_result >> 4) & 1)*10000;
+		// Get lower 6 bits of ADC result
+		binary[0] = ((adc_result >> 5) & 1)*100000;
+		binary[0] += ((adc_result >> 4) & 1)*10000;
 		binary[0] += ((adc_result >> 3) & 1)*1000;
 		binary[0] += ((adc_result >> 2) & 1)*100;
 		binary[0] += ((adc_result >> 1) & 1)*10;
 		binary[0] += ((adc_result) & 1)*1;
 		
 		// Format a message to send over UART0
-		snprintf(buffer, BUFFER_SIZE, "ADC Count[(%lu)], Binary[0b%06lu%05lu], Voltage[%f]\r\n", adc_result, binary[1], binary[0], voltage);
+		snprintf(buffer, BUFFER_SIZE, "ADC Count[(%lu)], Binary[0b%06lu%06lu], Voltage[%f]\r\n", adc_result, binary[1], binary[0], voltage);
 		
 		// Send the message over UART0
 		uart_print(UART0, buffer);
 		
 		// Toggle the LED
 		ioport_toggle_pin_level(TEST_LED);
+		
+		// Toggle the square wave
+		ioport_toggle_pin_level(SQUARE_PIN);
 	}
 	
 }
@@ -119,6 +126,13 @@ void led_setup(void)
 	// Configure TEST_LED I/O pin and set high
 	ioport_set_pin_dir(TEST_LED, IOPORT_DIR_OUTPUT);
 	ioport_set_pin_level(TEST_LED, 1);
+}
+
+void square_setup(void)
+{
+	// Configure TEST_LED I/O pin and set high
+	ioport_set_pin_dir(SQUARE_PIN, IOPORT_DIR_OUTPUT);
+	ioport_set_pin_level(SQUARE_PIN, 1);
 }
 
 // Sets up the UART0
