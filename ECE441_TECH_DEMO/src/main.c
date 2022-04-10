@@ -53,6 +53,7 @@ void led_setup(void);
 void square_setup(void);
 void uart_setup(void);
 void adc_setup(void);
+void rtt_setup(void);
 
 int main (void)
 {
@@ -72,48 +73,20 @@ int main (void)
 	
 	// Call setup routines
 	led_setup();
-	square_setup();
-	uart_setup();
-	adc_setup();
+	rtt_setup();
+	//square_setup();
+	//uart_setup();
+	//adc_setup();
 	
 	for(;;)
 	{
-		// Start a single ADC conversion
-		adc_start(ADC);
-		
-		// Wait 100 ms
-		delay_ms(100);
-		
-		// Convert ADC result into a voltage
-		voltage = ((float)(adc_result))/(4095.0) * 3.3;
-		
-		// Get upper 6 bits of ADC result
-		binary[1] = ((adc_result >> 11) & 1)*100000;
-		binary[1] += ((adc_result >> 10) & 1)*10000;
-		binary[1] += ((adc_result >> 9) & 1)*1000;
-		binary[1] += ((adc_result >> 8) & 1)*100;
-		binary[1] += ((adc_result >> 7) & 1)*10;
-		binary[1] += ((adc_result >> 6) & 1)*1;
-		
-		// Get lower 6 bits of ADC result
-		binary[0] = ((adc_result >> 5) & 1)*100000;
-		binary[0] += ((adc_result >> 4) & 1)*10000;
-		binary[0] += ((adc_result >> 3) & 1)*1000;
-		binary[0] += ((adc_result >> 2) & 1)*100;
-		binary[0] += ((adc_result >> 1) & 1)*10;
-		binary[0] += ((adc_result) & 1)*1;
-		
-		// Format a message to send over UART0
-		snprintf(buffer, BUFFER_SIZE, "ADC Count[(%lu)], Binary[0b%06lu%06lu], Voltage[%f]\r\n", adc_result, binary[1], binary[0], voltage);
-		
-		// Send the message over UART0
-		uart_print(UART0, buffer);
 		
 		// Toggle the LED
-		ioport_toggle_pin_level(TEST_LED);
+		delay_ms(1000);
 		
-		// Toggle the square wave
-		ioport_toggle_pin_level(SQUARE_PIN);
+		
+		//pmc_switch_mck_to_sclk(PMC_MCKR_PRES_CLK_1);
+		//pmc_enable_backupmode();
 	}
 	
 }
@@ -126,6 +99,17 @@ void led_setup(void)
 	// Configure TEST_LED I/O pin and set high
 	ioport_set_pin_dir(TEST_LED, IOPORT_DIR_OUTPUT);
 	ioport_set_pin_level(TEST_LED, 1);
+}
+
+void rtt_setup(void)
+{
+	NVIC_EnableIRQ(RTT_IRQn);
+	//setup rtt to run at 1hz from RTC
+	rtt_init(RTT, RTT_MR_RTC1HZ);
+	// 10 seconds?
+	rtt_write_alarm_time(RTT, 4);
+	// enable interrupt
+	rtt_enable_interrupt(RTT, RTT_MR_ALMIEN);
 }
 
 void square_setup(void)
@@ -196,6 +180,26 @@ void uart_print(Uart *p_uart, char* message){
 
 /* INTERRUPTS */
 
+void RTT_Handler( void) {
+    //reading status register will clear interrupt flags
+    uint32_t status = REG_RTT_SR;
+    if ((status & RTT_SR_ALMS) >= 1){//ALMS generated an interrupt		
+        /*
+        Run the Code that you want to run every interrupt
+        */
+		ioport_toggle_pin_level(TEST_LED); // Toggle
+		
+        //reset RTT counter
+        REG_RTT_MR |= RTT_MR_RTTRST;
+        //upon interrupt REG_RTT_AR.RTT_AR_ALMV gets set to the maximum value
+        //we need to disable alarm to set a new value in ALMV
+        REG_RTT_MR &= ~RTT_MR_ALMIEN;
+        REG_RTT_AR = 4;
+        //turn interrupt back on
+        REG_RTT_MR |= RTT_MR_ALMIEN;
+	}	
+}
+
 // Called during any enabled ADC interrupt
 void ADC_Handler(void)
 {
@@ -206,5 +210,7 @@ void ADC_Handler(void)
 		adc_result = adc_get_latest_value(ADC);
 	}
 }
+
+
 
 

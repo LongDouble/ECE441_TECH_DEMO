@@ -84,6 +84,12 @@
 // From module: Part identification macros
 #include <parts.h>
 
+// From module: RTT - Real Time Timer
+#include <rtt.h>
+
+// From module: SUPC - Supply Controller
+#include <supc.h>
+
 // From module: System Clock Control - SAM4S implementation
 #include <sysclk.h>
 
